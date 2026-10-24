@@ -5,6 +5,7 @@ from discord.ext import commands
 
 from database import get_guild_settings, update_guild_settings
 from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR
+from permissions import require_permission
 
 logger = logging.getLogger("bot.verification")
 
@@ -77,8 +78,7 @@ class Verification(commands.Cog):
 
     verify_group = app_commands.Group(
         name="verify",
-        description="Настройка системы верификации участников",
-        default_permissions=discord.Permissions(administrator=True)
+        description="Настройка системы верификации участников"
     )
 
     @verify_group.command(name="setup", description="Отправить панель верификации с кнопкой")
@@ -98,6 +98,8 @@ class Verification(commands.Cog):
         description: str = "Нажмите на кнопку **«Пройти верификацию»** ниже, чтобы подтвердить, что вы человек, и получить доступ ко всем каналам сервера!",
         color: str = "#6F38AA"
     ):
+        if not await require_permission(interaction, "settings"):
+            return
         bot_member = interaction.guild.me
         if role >= bot_member.top_role:
             embed = discord.Embed(
@@ -140,6 +142,8 @@ class Verification(commands.Cog):
 
     @verify_group.command(name="disable", description="Отключить систему верификации")
     async def verify_disable(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "settings"):
+            return
         await update_guild_settings(interaction.guild.id, verify_enabled=0)
         embed = discord.Embed(
             title="⚙️ Верификация отключена",

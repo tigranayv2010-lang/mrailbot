@@ -57,7 +57,8 @@ class UniversalBot(commands.Bot):
             "cogs.tickets",
             "cogs.embed_builder",
             "cogs.admin",
-            "cogs.panel"
+            "cogs.panel",
+            "cogs.permissions_panel"
         ]
 
         for cog in cogs:
@@ -99,12 +100,8 @@ class UniversalBot(commands.Bot):
             logger.info(f"   • {g.name} (ID: {g.id}) | Участников: {g.member_count}")
         logger.info("=" * 55)
 
-        # Установка статуса присутствия бота
-        activity = discord.Activity(
-            type=discord.ActivityType.watching,
-            name="/panel | Порядок на сервере"
-        )
-        await self.change_presence(status=discord.Status.online, activity=activity)
+        # Установка чистого статуса 'В сети' без текста активности
+        await self.change_presence(status=discord.Status.online)
 
 bot = UniversalBot()
 

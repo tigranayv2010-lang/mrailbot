@@ -12,6 +12,7 @@ from database import (
     close_ticket
 )
 from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING
+from permissions import require_permission
 
 logger = logging.getLogger("bot.tickets")
 
@@ -345,8 +346,7 @@ class Tickets(commands.Cog):
     # --- Slash Commands ---
     ticket_group = app_commands.Group(
         name="ticket",
-        description="Управление системой тикетов",
-        default_permissions=discord.Permissions(manage_channels=True)
+        description="Управление системой тикетов"
     )
 
     @ticket_group.command(name="setup", description="Отправить панель создания тикетов в канал")
@@ -369,6 +369,8 @@ class Tickets(commands.Cog):
         description: str = "Если у вас возник вопрос, жалоба или предложение — нажмите кнопку **«Создать тикет»** ниже.\n"
                            "Для вас будет автоматически создан отдельный приватный канал."
     ):
+        if not await require_permission(interaction, "tickets"):
+            return
         await update_guild_settings(
             interaction.guild.id,
             ticket_category_id=category.id if category else None,
@@ -401,6 +403,8 @@ class Tickets(commands.Cog):
 
     @ticket_group.command(name="close", description="Закрыть текущий канал тикета")
     async def ticket_close(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "tickets"):
+            return
         ticket_data = await get_ticket_by_channel(interaction.channel.id)
         if not ticket_data or ticket_data.get("status") != "open":
             return await interaction.response.send_message("❌ Эта команда может использоваться только внутри открытого тикета.", ephemeral=True)
@@ -411,6 +415,8 @@ class Tickets(commands.Cog):
     @ticket_group.command(name="add", description="Добавить пользователя в текущий тикет")
     @app_commands.describe(user="Пользователь, которого нужно добавить")
     async def ticket_add(self, interaction: discord.Interaction, user: discord.Member):
+        if not await require_permission(interaction, "tickets"):
+            return
         ticket_data = await get_ticket_by_channel(interaction.channel.id)
         if not ticket_data:
             return await interaction.response.send_message("❌ Эта команда доступна только внутри канала тикета.", ephemeral=True)
@@ -434,6 +440,8 @@ class Tickets(commands.Cog):
     @ticket_group.command(name="remove", description="Удалить пользователя из тикета")
     @app_commands.describe(user="Пользователь, которого нужно удалить")
     async def ticket_remove(self, interaction: discord.Interaction, user: discord.Member):
+        if not await require_permission(interaction, "tickets"):
+            return
         ticket_data = await get_ticket_by_channel(interaction.channel.id)
         if not ticket_data:
             return await interaction.response.send_message("❌ Эта команда доступна только внутри канала тикета.", ephemeral=True)

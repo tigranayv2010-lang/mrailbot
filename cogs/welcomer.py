@@ -5,6 +5,7 @@ from discord.ext import commands
 
 from database import get_guild_settings, update_guild_settings
 from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS
+from permissions import require_permission
 
 logger = logging.getLogger("bot.welcomer")
 
@@ -100,8 +101,7 @@ class Welcomer(commands.Cog):
     # --- Slash Commands ---
     welcome_group = app_commands.Group(
         name="welcome",
-        description="Настройка приветствий новых участников",
-        default_permissions=discord.Permissions(administrator=True)
+        description="Настройка приветствий новых участников"
     )
 
     @welcome_group.command(name="setup", description="Настроить канал и сообщение приветствия")
@@ -121,6 +121,8 @@ class Welcomer(commands.Cog):
         color: str = "#6F38AA",
         image_url: str = None
     ):
+        if not await require_permission(interaction, "settings"):
+            return
         await update_guild_settings(
             interaction.guild.id,
             welcome_enabled=1,
@@ -144,6 +146,8 @@ class Welcomer(commands.Cog):
 
     @welcome_group.command(name="test", description="Протестировать отправку текущего приветствия")
     async def welcome_test(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "settings"):
+            return
         settings = await get_guild_settings(interaction.guild.id)
         channel_id = settings.get("welcome_channel_id")
         channel = interaction.guild.get_channel(channel_id) if channel_id else interaction.channel
@@ -176,6 +180,8 @@ class Welcomer(commands.Cog):
 
     @welcome_group.command(name="disable", description="Отключить приветствия")
     async def welcome_disable(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "settings"):
+            return
         await update_guild_settings(interaction.guild.id, welcome_enabled=0)
         embed = discord.Embed(
             title="⚙️ Приветствия отключены",
@@ -186,6 +192,8 @@ class Welcomer(commands.Cog):
 
     @welcome_group.command(name="status", description="Просмотреть настройки приветствий")
     async def welcome_status(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "settings"):
+            return
         settings = await get_guild_settings(interaction.guild.id)
         enabled = bool(settings.get("welcome_enabled"))
         ch_id = settings.get("welcome_channel_id")

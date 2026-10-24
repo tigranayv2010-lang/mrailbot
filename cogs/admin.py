@@ -7,6 +7,7 @@ from discord.ext import commands
 
 from database import add_warn, get_warns, remove_warn, clear_warns
 from config import COLOR_SUCCESS, COLOR_ERROR, COLOR_WARNING, COLOR_PRIMARY
+from permissions import require_permission
 
 logger = logging.getLogger("bot.admin")
 
@@ -35,15 +36,16 @@ class Admin(commands.Cog):
     # --- KICK ---
     @app_commands.command(name="kick", description="Выгнать участника с сервера")
     @app_commands.describe(member="Участник", reason="Причина исключения")
-    @app_commands.default_permissions(kick_members=True)
     async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: str = "Причина не указана"):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         if member.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
             return await interaction.response.send_message("❌ Вы не можете выгнать участника с равной или более высокой ролью.", ephemeral=True)
         if member.top_role >= interaction.guild.me.top_role:
             return await interaction.response.send_message("❌ У бота недостаточно прав для исключения этого участника.", ephemeral=True)
 
         try:
-            # Уведомление в ЛС перед киком
             try:
                 dm_embed = discord.Embed(
                     title=f"⚠️ Вы были исключены с сервера {interaction.guild.name}",
@@ -73,7 +75,6 @@ class Admin(commands.Cog):
         reason="Причина блокировки",
         delete_messages_days="Удалить сообщения за последние N дней (0-7)"
     )
-    @app_commands.default_permissions(ban_members=True)
     async def ban(
         self,
         interaction: discord.Interaction,
@@ -81,6 +82,9 @@ class Admin(commands.Cog):
         reason: str = "Причина не указана",
         delete_messages_days: app_commands.Range[int, 0, 7] = 0
     ):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         if member.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
             return await interaction.response.send_message("❌ Вы не можете забанить участника с равной или более высокой ролью.", ephemeral=True)
         if member.top_role >= interaction.guild.me.top_role:
@@ -114,8 +118,10 @@ class Admin(commands.Cog):
     # --- UNBAN ---
     @app_commands.command(name="unban", description="Разблокировать пользователя по его ID")
     @app_commands.describe(user_id="ID заблокированного пользователя", reason="Причина разблокировки")
-    @app_commands.default_permissions(ban_members=True)
     async def unban(self, interaction: discord.Interaction, user_id: str, reason: str = "Причина не указана"):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         if not user_id.isdigit():
             return await interaction.response.send_message("❌ Введите корректный числовой ID пользователя.", ephemeral=True)
 
@@ -142,7 +148,6 @@ class Admin(commands.Cog):
         duration="Длительность (например: 10m, 1h, 1d, максимум 28d)",
         reason="Причина"
     )
-    @app_commands.default_permissions(moderate_members=True)
     async def mute(
         self,
         interaction: discord.Interaction,
@@ -150,6 +155,9 @@ class Admin(commands.Cog):
         duration: str = "10m",
         reason: str = "Нарушение правил"
     ):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         if member.top_role >= interaction.user.top_role and interaction.user.id != interaction.guild.owner_id:
             return await interaction.response.send_message("❌ Вы не можете заглушить участника с равной или более высокой ролью.", ephemeral=True)
         if member.top_role >= interaction.guild.me.top_role:
@@ -184,8 +192,10 @@ class Admin(commands.Cog):
     # --- UNMUTE ---
     @app_commands.command(name="unmute", description="Снять таймаут/заглушение с участника")
     @app_commands.describe(member="Участник")
-    @app_commands.default_permissions(moderate_members=True)
     async def unmute(self, interaction: discord.Interaction, member: discord.Member):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         try:
             await member.timeout(None, reason=f"Снятие таймаута (Модератор: {interaction.user})")
             embed = discord.Embed(
@@ -203,13 +213,15 @@ class Admin(commands.Cog):
         count="Количество сообщений для удаления (1-100)",
         user="Удалить только сообщения этого пользователя (опционально)"
     )
-    @app_commands.default_permissions(manage_messages=True)
     async def clear(
         self,
         interaction: discord.Interaction,
         count: app_commands.Range[int, 1, 100],
         user: discord.Member = None
     ):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         def check(m):
@@ -227,8 +239,10 @@ class Admin(commands.Cog):
     # --- WARN ---
     @app_commands.command(name="warn", description="Выдать предупреждение участнику")
     @app_commands.describe(member="Участник", reason="Причина предупреждения")
-    @app_commands.default_permissions(moderate_members=True)
     async def warn(self, interaction: discord.Interaction, member: discord.Member, reason: str):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         warn_id = await add_warn(interaction.guild.id, member.id, interaction.user.id, reason)
         all_warns = await get_warns(interaction.guild.id, member.id)
 
@@ -256,8 +270,10 @@ class Admin(commands.Cog):
     # --- WARNS LIST ---
     @app_commands.command(name="warns", description="Посмотреть список предупреждений участника")
     @app_commands.describe(member="Участник")
-    @app_commands.default_permissions(moderate_members=True)
     async def warns(self, interaction: discord.Interaction, member: discord.Member):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         warn_list = await get_warns(interaction.guild.id, member.id)
 
         embed = discord.Embed(
@@ -287,8 +303,10 @@ class Admin(commands.Cog):
     # --- UNWARN ---
     @app_commands.command(name="unwarn", description="Снять конкретное предупреждение по его ID")
     @app_commands.describe(warn_id="ID предупреждения")
-    @app_commands.default_permissions(moderate_members=True)
     async def unwarn(self, interaction: discord.Interaction, warn_id: int):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         success = await remove_warn(warn_id, interaction.guild.id)
         if success:
             await interaction.response.send_message(f"✅ Предупреждение `#{warn_id}` успешно удалено.", ephemeral=True)
@@ -298,8 +316,10 @@ class Admin(commands.Cog):
     # --- SLOWMODE ---
     @app_commands.command(name="slowmode", description="Установить медленный режим (slowmode) в канале")
     @app_commands.describe(seconds="Задержка между сообщениями в секундах (0 - отключить)")
-    @app_commands.default_permissions(manage_channels=True)
     async def slowmode(self, interaction: discord.Interaction, seconds: app_commands.Range[int, 0, 21600]):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         try:
             await interaction.channel.edit(slowmode_delay=seconds)
             if seconds == 0:
@@ -311,8 +331,10 @@ class Admin(commands.Cog):
 
     # --- LOCK / UNLOCK ---
     @app_commands.command(name="lock", description="Заблокировать канал для отправки сообщений участниками")
-    @app_commands.default_permissions(manage_channels=True)
     async def lock(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         try:
             await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=False)
             embed = discord.Embed(
@@ -325,8 +347,10 @@ class Admin(commands.Cog):
             await interaction.response.send_message(f"❌ Ошибка блокировки: {e}", ephemeral=True)
 
     @app_commands.command(name="unlock", description="Разблокировать канал для отправки сообщений")
-    @app_commands.default_permissions(manage_channels=True)
     async def unlock(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "moderation"):
+            return
+
         try:
             await interaction.channel.set_permissions(interaction.guild.default_role, send_messages=None)
             embed = discord.Embed(

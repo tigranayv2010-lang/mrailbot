@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR
+from permissions import require_permission
 
 logger = logging.getLogger("bot.embed_builder")
 
@@ -337,12 +338,13 @@ class EmbedBuilder(commands.Cog):
 
     embed_group = app_commands.Group(
         name="embed",
-        description="Конструктор красивых Embed-сообщений",
-        default_permissions=discord.Permissions(manage_messages=True)
+        description="Конструктор красивых Embed-сообщений"
     )
 
     @embed_group.command(name="builder", description="Открыть интерактивный визуальный конструктор сообщений")
     async def embed_builder(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "embeds"):
+            return
         view = EmbedBuilderView(author_id=interaction.user.id)
         embeds = view.build_embeds()
         await interaction.response.send_message(
@@ -357,6 +359,8 @@ class EmbedBuilder(commands.Cog):
     @embed_group.command(name="screenshot_preset", description="Отправить точную копию оформления со скриншота в канал")
     @app_commands.describe(channel="Канал, куда отправить оформление")
     async def embed_screenshot_preset(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not await require_permission(interaction, "embeds"):
+            return
         embed1 = discord.Embed(
             title="Информация о проекте",
             description=(
@@ -421,6 +425,8 @@ class EmbedBuilder(commands.Cog):
         thumbnail: str = None,
         footer: str = None
     ):
+        if not await require_permission(interaction, "embeds"):
+            return
         embed = discord.Embed(
             title=title,
             description=description,
@@ -445,6 +451,8 @@ class EmbedBuilder(commands.Cog):
         json_data="JSON структура embed или списка embeds"
     )
     async def embed_json_send(self, interaction: discord.Interaction, channel: discord.TextChannel, json_data: str):
+        if not await require_permission(interaction, "embeds"):
+            return
         try:
             parsed = json.loads(json_data)
             embeds = []

@@ -9,6 +9,8 @@ from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR
 from cogs.verification import VerifyButtonView
 from cogs.tickets import TicketLaunchView
 from cogs.embed_builder import EmbedBuilderView
+from cogs.permissions_panel import PermissionsPanelView
+from permissions import require_permission
 
 logger = logging.getLogger("bot.panel")
 
@@ -344,6 +346,12 @@ class BotControlPanelView(discord.ui.View):
             ephemeral=True
         )
 
+    @discord.ui.button(label="Доступы к командам", style=discord.ButtonStyle.primary, emoji="🔐", row=2)
+    async def btn_permissions(self, interaction: discord.Interaction, button: discord.ui.Button):
+        perm_view = PermissionsPanelView(self.guild, interaction.user.id)
+        embed = await perm_view.build_embed()
+        await interaction.response.send_message(embed=embed, view=perm_view, ephemeral=True)
+
 class Panel(commands.Cog):
     """Главная интерактивная Панель Управления ботом"""
 
@@ -351,8 +359,9 @@ class Panel(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="panel", description="Открыть главную интерактивную панель управления сервером и ботом")
-    @app_commands.default_permissions(administrator=True)
     async def panel_command(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "panel"):
+            return
         panel_view = BotControlPanelView(self.bot, interaction.guild, interaction.user.id)
         embed = await panel_view.build_main_embed()
         await interaction.response.send_message(embed=embed, view=panel_view, ephemeral=True)

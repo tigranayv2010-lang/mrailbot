@@ -5,6 +5,7 @@ from discord.ext import commands
 
 from database import get_guild_settings, update_guild_settings
 from config import COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR
+from permissions import require_permission
 
 logger = logging.getLogger("bot.autorole")
 
@@ -43,13 +44,14 @@ class AutoRole(commands.Cog):
     # --- Slash Commands ---
     autorole_group = app_commands.Group(
         name="autorole",
-        description="Настройка автоматической выдачи роли новым участникам",
-        default_permissions=discord.Permissions(administrator=True)
+        description="Настройка автоматической выдачи роли новым участникам"
     )
 
     @autorole_group.command(name="set", description="Установить роль для новых участников")
     @app_commands.describe(role="Роль, которая будет выдаваться автоматически при входе")
     async def autorole_set(self, interaction: discord.Interaction, role: discord.Role):
+        if not await require_permission(interaction, "settings"):
+            return
         # Проверка иерархии ролей бота
         bot_member = interaction.guild.me
         if role >= bot_member.top_role:
@@ -76,6 +78,8 @@ class AutoRole(commands.Cog):
 
     @autorole_group.command(name="disable", description="Отключить автоматическую выдачу ролей")
     async def autorole_disable(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "settings"):
+            return
         await update_guild_settings(interaction.guild.id, autorole_enabled=0)
         embed = discord.Embed(
             title="⚙️ Авто-роль отключена",
@@ -86,6 +90,8 @@ class AutoRole(commands.Cog):
 
     @autorole_group.command(name="status", description="Проверить статус авто-роли")
     async def autorole_status(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "settings"):
+            return
         settings = await get_guild_settings(interaction.guild.id)
         enabled = bool(settings.get("autorole_enabled"))
         role_id = settings.get("autorole_id")

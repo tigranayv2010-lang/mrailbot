@@ -53,6 +53,15 @@ async def init_db():
             )
         """)
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                guild_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                role_id INTEGER NOT NULL,
+                PRIMARY KEY (guild_id, category, role_id)
+            )
+        """)
+
         await db.commit()
 
 async def get_guild_settings(guild_id: int) -> Dict[str, Any]:
@@ -175,6 +184,63 @@ async def clear_warns(guild_id: int, user_id: int) -> int:
         cursor = await db.execute(
             "DELETE FROM warns WHERE guild_id = ? AND user_id = ?",
             (guild_id, user_id)
+        )
+        await db.commit()
+        return cursor.rowcount
+
+# --- Role Permissions (Управление доступом к командам) ---
+
+async def add_category_role(guild_id: int, category: str, role_id: int) -> bool:
+    """Добавить роль в список разрешенных для категории команд"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO role_permissions (guild_id, category, role_id) VALUES (?, ?, ?)",
+            (guild_id, category, role_id)
+        )
+        await db.commit()
+        return True
+
+async def remove_category_role(guild_id: int, category: str, role_id: int) -> bool:
+    """Удалить роль из разрешенных для категории команд"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "DELETE FROM role_permissions WHERE guild_id = ? AND category = ? AND role_id = ?",
+            (guild_id, category, role_id)
+        )
+        await db.commit()
+        return cursor.rowcount > 0
+
+async def get_category_roles(guild_id: int, category: str) -> List[int]:
+    """Получить список ID ролей, имеющих доступ к указанной категории"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT role_id FROM role_permissions WHERE guild_id = ? AND category = ?",
+            (guild_id, category)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [r[0] for r in rows]
+
+async def get_all_guild_permissions(guild_id: int) -> Dict[str, List[int]]:
+    """Получить распределение всех ролей по категориям для сервера"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT category, role_id FROM role_permissions WHERE guild_id = ?",
+            (guild_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            result: Dict[str, List[int]] = {}
+            for cat, rid in rows:
+                if cat not in result:
+                    result[cat] = []
+                result[cat].append(rid)
+            return result
+
+async def clear_category_roles(guild_id: int, category: str) -> int:
+    """Сбросить настройки ролей для категории (возврат к стандартным правам)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "DELETE FROM role_permissions WHERE guild_id = ? AND category = ?",
+            (guild_id, category)
         )
         await db.commit()
         return cursor.rowcount
