@@ -13,7 +13,7 @@ CATEGORIES: Dict[str, Dict[str, Any]] = {
     "tickets": {
         "name": "Тикеты",
         "title": "🎫 Управление тикетами",
-        "description": "Команды: `/ticket setup`, `/ticket close`, `/ticket add`, `/ticket remove`",
+        "description": "Команды: `/ticket builder`, `/ticket_builder`, `/ticket setup`, `/ticket close`, `/ticket add`, `/ticket remove`",
         "default_hint": "Права Управление каналами или Администратор"
     },
     "embeds": {

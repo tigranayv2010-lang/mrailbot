@@ -62,7 +62,51 @@ async def init_db():
             )
         """)
 
+        # Автоматическая миграция: добавление новых колонок в guild_settings
+        async with db.execute("PRAGMA table_info(guild_settings)") as cursor:
+            rows = await cursor.fetchall()
+            existing_cols = [r[1] for r in rows]
+
+        new_columns = {
+            "autorole_ids": "TEXT DEFAULT ''",
+            "verify_role_ids": "TEXT DEFAULT ''",
+            "ticket_support_role_ids": "TEXT DEFAULT ''",
+            "ticket_panel_title": "TEXT DEFAULT 'Поддержка и создание тикетов'",
+            "ticket_panel_desc": "TEXT DEFAULT 'Если у вас возник вопрос, жалоба или предложение — нажмите кнопку ниже.\nДля вас будет автоматически создан приватный канал.'",
+            "ticket_panel_color": "TEXT DEFAULT '#FFFFFF'",
+            "ticket_btn_label": "TEXT DEFAULT 'Создать тикет'",
+            "ticket_btn_emoji": "TEXT DEFAULT '📩'",
+            "ticket_inside_title": "TEXT DEFAULT 'Тикет #{number}'",
+            "ticket_inside_desc": "TEXT DEFAULT 'Здравствуйте, {user}!\nОпишите ваш вопрос или проблему. Служба поддержки свяжется с вами в ближайшее время.'",
+            "ticket_close_btn_label": "TEXT DEFAULT 'Закрыть тикет'",
+            "ticket_transcript_btn_label": "TEXT DEFAULT 'Транскрипт'",
+            "ticket_adduser_btn_label": "TEXT DEFAULT 'Добавить участника'",
+            "ticket_alert_btn_label": "TEXT DEFAULT 'Позвать поддержку'"
+        }
+
+        for col_name, col_def in new_columns.items():
+            if col_name not in existing_cols:
+                await db.execute(f"ALTER TABLE guild_settings ADD COLUMN {col_name} {col_def}")
+
         await db.commit()
+
+def parse_id_list(raw_val: Any) -> List[int]:
+    """Преобразует строку с ID через запятую или одиночный int в список ID"""
+    if not raw_val:
+        return []
+    if isinstance(raw_val, int):
+        return [raw_val]
+    if isinstance(raw_val, (list, tuple, set)):
+        return [int(x) for x in raw_val if str(x).isdigit()]
+    if isinstance(raw_val, str):
+        return [int(x.strip()) for x in raw_val.split(",") if x.strip().isdigit()]
+    return []
+
+def format_id_list(id_list: List[int]) -> str:
+    """Преобразует список ID в строку через запятую"""
+    if not id_list:
+        return ""
+    return ",".join(str(x) for x in id_list)
 
 async def get_guild_settings(guild_id: int) -> Dict[str, Any]:
     """Получить настройки сервера. Если записи нет - создается дефолтная."""

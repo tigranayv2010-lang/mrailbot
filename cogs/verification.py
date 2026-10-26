@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from database import get_guild_settings, update_guild_settings
+from database import get_guild_settings, update_guild_settings, parse_id_list, format_id_list
 from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR
 from permissions import require_permission
 
@@ -22,18 +22,18 @@ class VerifyButtonView(discord.ui.View):
     )
     async def verify_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         settings = await get_guild_settings(interaction.guild.id)
-        role_id = settings.get("verify_role_id")
+        role_ids = parse_id_list(settings.get("verify_role_ids")) or parse_id_list(settings.get("verify_role_id"))
 
-        if not role_id:
+        if not role_ids:
             return await interaction.response.send_message(
-                "❌ Роль для верификации не настроена администратором сервера.",
+                "❌ Роли для верификации не настроены администратором сервера.",
                 ephemeral=True
             )
 
-        role = interaction.guild.get_role(role_id)
-        if not role:
+        roles = [interaction.guild.get_role(rid) for rid in role_ids if interaction.guild.get_role(rid)]
+        if not roles:
             return await interaction.response.send_message(
-                "❌ Роль верификации не найдена (возможно, она была удалена).",
+                "❌ Роли верификации не найдены на сервере (возможно, они были удалены).",
                 ephemeral=True
             )
 
@@ -41,17 +41,21 @@ class VerifyButtonView(discord.ui.View):
         if not isinstance(member, discord.Member):
             return
 
-        if role in member.roles:
+        user_role_ids = {r.id for r in member.roles}
+        needed_roles = [r for r in roles if r.id not in user_role_ids]
+
+        if not needed_roles:
             return await interaction.response.send_message(
-                "ℹ️ Вы уже прошли верификацию и обладаете необходимыми правами!",
+                "ℹ️ Вы уже прошли верификацию и обладаете всеми необходимыми ролями!",
                 ephemeral=True
             )
 
         try:
-            await member.add_roles(role, reason="Верификация через кнопку")
+            await member.add_roles(*needed_roles, reason="Верификация через кнопку")
+            roles_mentions = ", ".join([r.mention for r in needed_roles])
             embed = discord.Embed(
                 title="✅ Верификация пройдена!",
-                description=f"Вам успешно выдана роль {role.mention}.\nПриятного общения на сервере **{interaction.guild.name}**!",
+                description=f"Вам успешно выданы роли: {roles_mentions}.\nПриятного общения на сервере **{interaction.guild.name}**!",
                 color=COLOR_SUCCESS
             )
             await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -96,7 +100,7 @@ class Verification(commands.Cog):
         role: discord.Role,
         title: str = "Верификация на сервере",
         description: str = "Нажмите на кнопку **«Пройти верификацию»** ниже, чтобы подтвердить, что вы человек, и получить доступ ко всем каналам сервера!",
-        color: str = "#6F38AA"
+        color: str = "#FFFFFF"
     ):
         if not await require_permission(interaction, "settings"):
             return
@@ -115,6 +119,7 @@ class Verification(commands.Cog):
             interaction.guild.id,
             verify_enabled=1,
             verify_role_id=role.id,
+            verify_role_ids=str(role.id),
             verify_channel_id=channel.id
         )
 

@@ -4,10 +4,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from database import get_guild_settings, update_guild_settings
+from database import get_guild_settings, update_guild_settings, parse_id_list, format_id_list
 from config import parse_color, COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR, COLOR_INFO
 from cogs.verification import VerifyButtonView
-from cogs.tickets import TicketLaunchView
+from cogs.tickets import TicketLaunchView, TicketBuilderView
 from cogs.embed_builder import EmbedBuilderView
 from cogs.permissions_panel import PermissionsPanelView
 from permissions import require_permission
@@ -71,19 +71,25 @@ class BotControlPanelView(discord.ui.View):
     async def build_main_embed(self) -> discord.Embed:
         settings = await get_guild_settings(self.guild.id)
 
-        # Статусы модулей
-        autorole_role = self.guild.get_role(settings.get("autorole_id")) if settings.get("autorole_id") else None
-        autorole_status = f"🟢 Вкл ({autorole_role.mention if autorole_role else 'Роль не найдена'})" if settings.get("autorole_enabled") else "🔴 Выкл"
+        # Статусы модулей с поддержкой мульти-ролей
+        ar_ids = parse_id_list(settings.get("autorole_ids")) or parse_id_list(settings.get("autorole_id"))
+        ar_roles = [self.guild.get_role(rid) for rid in ar_ids if self.guild.get_role(rid)]
+        ar_str = " ".join([r.mention for r in ar_roles]) if ar_roles else "Роли не выбраны"
+        autorole_status = f"🟢 Вкл ({ar_str})" if settings.get("autorole_enabled") else "🔴 Выкл"
 
         welcome_ch = self.guild.get_channel(settings.get("welcome_channel_id")) if settings.get("welcome_channel_id") else None
         welcome_status = f"🟢 Вкл ({welcome_ch.mention if welcome_ch else 'Канал не найден'})" if settings.get("welcome_enabled") else "🔴 Выкл"
 
-        verify_role = self.guild.get_role(settings.get("verify_role_id")) if settings.get("verify_role_id") else None
-        verify_status = f"🟢 Настроена ({verify_role.mention if verify_role else 'Роль не найдена'})" if settings.get("verify_enabled") else "🔴 Выкл"
+        vr_ids = parse_id_list(settings.get("verify_role_ids")) or parse_id_list(settings.get("verify_role_id"))
+        vr_roles = [self.guild.get_role(rid) for rid in vr_ids if self.guild.get_role(rid)]
+        vr_str = " ".join([r.mention for r in vr_roles]) if vr_roles else "Роли не выбраны"
+        verify_status = f"🟢 Настроена ({vr_str})" if settings.get("verify_enabled") else "🔴 Выкл"
 
+        tr_ids = parse_id_list(settings.get("ticket_support_role_ids")) or parse_id_list(settings.get("ticket_support_role_id"))
+        tr_roles = [self.guild.get_role(rid) for rid in tr_ids if self.guild.get_role(rid)]
+        tr_str = " ".join([r.mention for r in tr_roles]) if tr_roles else "Все админы"
         ticket_cat = self.guild.get_channel(settings.get("ticket_category_id")) if settings.get("ticket_category_id") else None
-        ticket_role = self.guild.get_role(settings.get("ticket_support_role_id")) if settings.get("ticket_support_role_id") else None
-        ticket_status = f"🟢 Категория: {ticket_cat.name if ticket_cat else 'По умолчанию'} | Роль: {ticket_role.name if ticket_role else 'Все админы'}"
+        ticket_status = f"🟢 Категория: {ticket_cat.name if ticket_cat else 'По умолчанию'} | Роли: {tr_str}"
 
         embed = discord.Embed(
             title=f"🎛️ Панель управления ботом • {self.guild.name}",
@@ -123,32 +129,39 @@ class BotControlPanelView(discord.ui.View):
     @discord.ui.button(label="Авто-роль", style=discord.ButtonStyle.secondary, emoji="👤", row=0)
     async def btn_autorole(self, interaction: discord.Interaction, button: discord.ui.Button):
         settings = await get_guild_settings(self.guild.id)
-        current_role = self.guild.get_role(settings.get("autorole_id")) if settings.get("autorole_id") else None
+        ar_ids = parse_id_list(settings.get("autorole_ids")) or parse_id_list(settings.get("autorole_id"))
+        current_roles = [self.guild.get_role(rid) for rid in ar_ids if self.guild.get_role(rid)]
+        roles_str = ", ".join([r.mention for r in current_roles]) if current_roles else "Не установлены"
         enabled = bool(settings.get("autorole_enabled"))
 
         embed = discord.Embed(
-            title="👤 Управление Авто-ролью",
-            description="Автоматическая выдача роли участникам при первом входе на сервер.\n\n"
+            title="👤 Управление Авто-ролью (Мульти-выбор)",
+            description="Автоматическая выдача ролей участникам при первом входе на сервер.\n\n"
                         f"**Текущий статус:** {'🟢 Включено' if enabled else '🔴 Выключено'}\n"
-                        f"**Назначенная роль:** {current_role.mention if current_role else 'Не установлена'}\n\n"
-                        "💡 *Выберите роль в меню ниже, чтобы установить её, или нажмите кнопку переключения.*",
+                        f"**Назначенные роли:** {roles_str}\n\n"
+                        "💡 *Выберите одну или несколько ролей в меню ниже (до 25).* ",
             color=COLOR_PRIMARY
         )
 
         sub_view = discord.ui.View(timeout=300)
-        
-        # Role select
-        role_select = discord.ui.RoleSelect(placeholder="Выберите роль для авто-выдачи...", min_values=1, max_values=1)
-        
+
+        # Multi-role select
+        role_select = discord.ui.RoleSelect(
+            placeholder="Выберите одну или несколько ролей (до 25)...",
+            min_values=1,
+            max_values=25
+        )
+
         async def on_role_select(sel_interaction: discord.Interaction):
-            chosen_role = sel_interaction.data["values"][0]
-            role_obj = sel_interaction.guild.get_role(int(chosen_role))
-            if role_obj >= sel_interaction.guild.me.top_role:
-                return await sel_interaction.response.send_message(
-                    "❌ Роль бота должна быть ВЫШЕ выбранной роли в иерархии ролей сервера!", ephemeral=True
-                )
-            await update_guild_settings(sel_interaction.guild.id, autorole_enabled=1, autorole_id=role_obj.id)
-            await sel_interaction.response.send_message(f"✅ Роль {role_obj.mention} установлена и автовыдача включена!", ephemeral=True)
+            chosen_role_ids = [int(r.id) for r in role_select.values]
+            await update_guild_settings(
+                sel_interaction.guild.id,
+                autorole_enabled=1,
+                autorole_ids=format_id_list(chosen_role_ids),
+                autorole_id=chosen_role_ids[0] if chosen_role_ids else None
+            )
+            roles_mentions = ", ".join([f"<@&{rid}>" for rid in chosen_role_ids])
+            await sel_interaction.response.send_message(f"✅ Авто-роли обновлены: {roles_mentions} (Включено)!", ephemeral=True)
             await self.refresh_view(interaction)
 
         role_select.callback = on_role_select
@@ -208,7 +221,7 @@ class BotControlPanelView(discord.ui.View):
                 self,
                 settings.get("welcome_title", "Добро пожаловать!"),
                 settings.get("welcome_message", ""),
-                settings.get("welcome_color", "#6F38AA")
+                settings.get("welcome_color", "#FFFFFF")
             )
             await btn_interaction.response.send_modal(modal)
         edit_btn.callback = on_edit
@@ -233,27 +246,36 @@ class BotControlPanelView(discord.ui.View):
     @discord.ui.button(label="Верификация", style=discord.ButtonStyle.secondary, emoji="🛡️", row=1)
     async def btn_verification(self, interaction: discord.Interaction, button: discord.ui.Button):
         settings = await get_guild_settings(self.guild.id)
-        role = self.guild.get_role(settings.get("verify_role_id")) if settings.get("verify_role_id") else None
+        vr_ids = parse_id_list(settings.get("verify_role_ids")) or parse_id_list(settings.get("verify_role_id"))
+        current_roles = [self.guild.get_role(rid) for rid in vr_ids if self.guild.get_role(rid)]
+        roles_str = ", ".join([r.mention for r in current_roles]) if current_roles else "Не настроены"
 
         embed = discord.Embed(
-            title="🛡️ Управление Верификацией",
-            description=f"**Роль за верификацию:** {role.mention if role else 'Не настроена'}\n\n"
-                        "💡 *Выберите роль, которая будет выдаваться при нажатии на кнопку верификации, "
+            title="🛡️ Управление Верификацией (Мульти-выбор)",
+            description=f"**Роли за верификацию:** {roles_str}\n\n"
+                        "💡 *Выберите одну или несколько ролей, которые будут выдаваться при нажатии на кнопку верификации, "
                         "а затем отправьте сообщение с кнопкой в нужный канал.*",
             color=COLOR_PRIMARY
         )
 
         sub_view = discord.ui.View(timeout=300)
 
-        # Select role
-        role_select = discord.ui.RoleSelect(placeholder="Выберите роль верификации...", min_values=1, max_values=1)
+        # Multi-role select
+        role_select = discord.ui.RoleSelect(
+            placeholder="Выберите роли за верификацию (до 25)...",
+            min_values=1,
+            max_values=25
+        )
         async def on_vrole_select(sel_interaction: discord.Interaction):
-            rid = int(sel_interaction.data["values"][0])
-            r_obj = sel_interaction.guild.get_role(rid)
-            if r_obj >= sel_interaction.guild.me.top_role:
-                return await sel_interaction.response.send_message("❌ Роль бота должна быть ВЫШЕ этой роли!", ephemeral=True)
-            await update_guild_settings(sel_interaction.guild.id, verify_enabled=1, verify_role_id=rid)
-            await sel_interaction.response.send_message(f"✅ Роль верификации установлена: {r_obj.mention}", ephemeral=True)
+            chosen_role_ids = [int(r.id) for r in role_select.values]
+            await update_guild_settings(
+                sel_interaction.guild.id,
+                verify_enabled=1,
+                verify_role_ids=format_id_list(chosen_role_ids),
+                verify_role_id=chosen_role_ids[0] if chosen_role_ids else None
+            )
+            roles_mentions = ", ".join([f"<@&{rid}>" for rid in chosen_role_ids])
+            await sel_interaction.response.send_message(f"✅ Роли верификации установлены: {roles_mentions}", ephemeral=True)
             await self.refresh_view(interaction)
         role_select.callback = on_vrole_select
         sub_view.add_item(role_select)
@@ -285,46 +307,72 @@ class BotControlPanelView(discord.ui.View):
     async def btn_tickets(self, interaction: discord.Interaction, button: discord.ui.Button):
         settings = await get_guild_settings(self.guild.id)
         cat = self.guild.get_channel(settings.get("ticket_category_id")) if settings.get("ticket_category_id") else None
-        s_role = self.guild.get_role(settings.get("ticket_support_role_id")) if settings.get("ticket_support_role_id") else None
+        
+        tr_ids = parse_id_list(settings.get("ticket_support_role_ids")) or parse_id_list(settings.get("ticket_support_role_id"))
+        s_roles = [self.guild.get_role(rid) for rid in tr_ids if self.guild.get_role(rid)]
+        roles_str = ", ".join([r.mention for r in s_roles]) if s_roles else "Не выбраны (все админы)"
+
         log_ch = self.guild.get_channel(settings.get("ticket_log_channel_id")) if settings.get("ticket_log_channel_id") else None
 
         embed = discord.Embed(
             title="🎫 Управление Системой Тикетов",
             description=f"**Категория тикетов:** {cat.name if cat else 'Не выбрана'}\n"
-                        f"**Роль поддержки:** {s_role.mention if s_role else 'Не выбрана'}\n"
+                        f"**Роли поддержки (мульти):** {roles_str}\n"
                         f"**Канал логов/транскриптов:** {log_ch.mention if log_ch else 'Не выбран'}\n\n"
-                        "💡 *Настройте параметры ниже, затем нажмите кнопку «Опубликовать панель тикетов».*",
+                        "💡 *Вы можете настроить тикеты с нуля (кнопки, тексты, оформление) через Конструктор!*",
             color=COLOR_PRIMARY
         )
 
         sub_view = discord.ui.View(timeout=300)
 
-        # Support role select
-        role_select = discord.ui.RoleSelect(placeholder="Выберите роль службы поддержки...", min_values=1, max_values=1)
+        # Builder button (Конструктор с нуля)
+        builder_btn = discord.ui.Button(label="🛠️ Конструктор тикетов с нуля", style=discord.ButtonStyle.primary, emoji="🛠️")
+        async def on_builder_click(btn_interaction: discord.Interaction):
+            t_builder = TicketBuilderView(self.guild, btn_interaction.user.id)
+            embed_b = await t_builder.build_embed()
+            await btn_interaction.response.send_message(embed=embed_b, view=t_builder, ephemeral=True)
+        builder_btn.callback = on_builder_click
+        sub_view.add_item(builder_btn)
+
+        # Support roles multi-select
+        role_select = discord.ui.RoleSelect(
+            placeholder="Выберите роли службы поддержки (до 25)...",
+            min_values=1,
+            max_values=25
+        )
         async def on_srole_select(sel_interaction: discord.Interaction):
-            rid = int(sel_interaction.data["values"][0])
-            r_obj = sel_interaction.guild.get_role(rid)
-            await update_guild_settings(sel_interaction.guild.id, ticket_support_role_id=rid)
-            await sel_interaction.response.send_message(f"✅ Роль поддержки тикетов установлена: {r_obj.mention}", ephemeral=True)
+            chosen_role_ids = [int(r.id) for r in role_select.values]
+            await update_guild_settings(
+                sel_interaction.guild.id,
+                ticket_support_role_ids=format_id_list(chosen_role_ids),
+                ticket_support_role_id=chosen_role_ids[0] if chosen_role_ids else None
+            )
+            roles_mentions = ", ".join([f"<@&{rid}>" for rid in chosen_role_ids])
+            await sel_interaction.response.send_message(f"✅ Роли поддержки тикетов обновлены: {roles_mentions}", ephemeral=True)
             await self.refresh_view(interaction)
         role_select.callback = on_srole_select
         sub_view.add_item(role_select)
 
         # Send ticket launch view button
-        publish_btn = discord.ui.Button(label="Опубликовать панель создания тикетов", style=discord.ButtonStyle.success, emoji="📩")
+        publish_btn = discord.ui.Button(label="Опубликовать панель тикетов в канал", style=discord.ButtonStyle.success, emoji="📩")
         async def on_pub_click(btn_interaction: discord.Interaction):
             ch_sub = discord.ui.View(timeout=120)
             ch_select = discord.ui.ChannelSelect(placeholder="Выберите канал для кнопки создания тикетов...", channel_types=[discord.ChannelType.text])
             async def ch_ticket_cb(ch_interaction: discord.Interaction):
                 target_channel = ch_interaction.guild.get_channel(int(ch_interaction.data["values"][0]))
                 t_embed = discord.Embed(
-                    title="Поддержка и создание тикетов",
-                    description="Если у вас возник вопрос, жалоба или предложение — нажмите кнопку **«Создать тикет»** ниже.\n"
-                                "Для вас будет автоматически создан приватный канал для общения со стаффом.",
+                    title=settings.get("ticket_panel_title", "Поддержка и создание тикетов"),
+                    description=settings.get("ticket_panel_desc", "Если у вас возник вопрос, жалоба или предложение — нажмите кнопку ниже.\nДля вас будет автоматически создан приватный канал."),
                     color=COLOR_PRIMARY
                 )
                 t_embed.set_footer(text=f"Служба поддержки • {ch_interaction.guild.name}")
-                await target_channel.send(embed=t_embed, view=TicketLaunchView())
+                await target_channel.send(
+                    embed=t_embed,
+                    view=TicketLaunchView(
+                        label=settings.get("ticket_btn_label", "Создать тикет"),
+                        emoji=settings.get("ticket_btn_emoji", "📩")
+                    )
+                )
                 await ch_interaction.response.send_message(f"✅ Панель тикетов отправлена в {target_channel.mention}!", ephemeral=True)
             ch_select.callback = ch_ticket_cb
             ch_sub.add_item(ch_select)

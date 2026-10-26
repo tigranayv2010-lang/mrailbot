@@ -40,8 +40,8 @@ class EditMainModal(discord.ui.Modal, title="Редактирование Заг
 class EditStyleModal(discord.ui.Modal, title="Настройка Цвета и Медиа"):
     color_input = discord.ui.TextInput(
         label="Цвет боковой полосы (HEX)",
-        placeholder="#6F38AA (фиолетовый как на скриншоте)",
-        default="#6F38AA",
+        placeholder="#FFFFFF (белый по умолчанию)",
+        default="#FFFFFF",
         required=False,
         max_length=10
     )
@@ -58,13 +58,13 @@ class EditStyleModal(discord.ui.Modal, title="Настройка Цвета и �
 
     def __init__(self, current_color: str, current_thumb: str, current_img: str):
         super().__init__()
-        self.color_input.default = current_color or "#6F38AA"
+        self.color_input.default = current_color or "#FFFFFF"
         self.thumbnail_input.default = current_thumb or ""
         self.image_input.default = current_img or ""
 
     async def on_submit(self, interaction: discord.Interaction):
         view: EmbedBuilderView = self.builder_view
-        view.current_data["color"] = self.color_input.value.strip() or "#6F38AA"
+        view.current_data["color"] = self.color_input.value.strip() or "#FFFFFF"
         view.current_data["thumbnail"] = self.thumbnail_input.value.strip() or None
         view.current_data["image"] = self.image_input.value.strip() or None
         await view.update_preview(interaction)
@@ -181,7 +181,7 @@ class EmbedBuilderView(discord.ui.View):
         self.current_data = {
             "title": "Информация о проекте",
             "description": "Привет новенький!\nТы попал на наш сервер.\n\nЗдесь вы можете настроить любой текст, цвета и ссылки на каналы!",
-            "color": "#6F38AA",
+            "color": "#FFFFFF",
             "thumbnail": None,
             "image": None,
             "author": None,
@@ -202,7 +202,7 @@ class EmbedBuilderView(discord.ui.View):
         return True
 
     def build_single_embed(self, data: dict) -> discord.Embed:
-        color = parse_color(data.get("color") or "#6F38AA")
+        color = parse_color(data.get("color") or "#FFFFFF")
         embed = discord.Embed(
             title=data.get("title") or None,
             description=data.get("description") or None,
@@ -243,7 +243,7 @@ class EmbedBuilderView(discord.ui.View):
 
     @discord.ui.button(label="Цвет & Картинки", style=discord.ButtonStyle.secondary, emoji="🎨", row=1)
     async def btn_style(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = EditStyleModal(self.current_data.get("color", "#6F38AA"), self.current_data.get("thumbnail", ""), self.current_data.get("image", ""))
+        modal = EditStyleModal(self.current_data.get("color", "#FFFFFF"), self.current_data.get("thumbnail", ""), self.current_data.get("image", ""))
         modal.builder_view = self
         await interaction.response.send_modal(modal)
 
@@ -420,7 +420,7 @@ class EmbedBuilder(commands.Cog):
         channel: discord.TextChannel,
         description: str,
         title: str = None,
-        color: str = "#6F38AA",
+        color: str = "#FFFFFF",
         image: str = None,
         thumbnail: str = None,
         footer: str = None

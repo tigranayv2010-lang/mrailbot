@@ -42,15 +42,15 @@ class CategorySelect(discord.ui.Select):
 class PermissionsRoleSelect(discord.ui.RoleSelect):
     def __init__(self):
         super().__init__(
-            placeholder="Выберите роль для добавления/удаления...",
+            placeholder="Выберите одну или несколько ролей (до 25)...",
             min_values=1,
-            max_values=1,
+            max_values=25,
             row=1
         )
 
     async def callback(self, interaction: discord.Interaction):
         view: PermissionsPanelView = self.view
-        view.selected_role_id = int(self.values[0].id)
+        view.selected_role_ids = [int(r.id) for r in self.values]
         await interaction.response.defer()
 
 class PermissionsPanelView(discord.ui.View):
@@ -61,7 +61,7 @@ class PermissionsPanelView(discord.ui.View):
         self.guild = guild
         self.author_id = author_id
         self.selected_category = "moderation"
-        self.selected_role_id = None
+        self.selected_role_ids = []
 
         self.add_item(CategorySelect(selected_category=self.selected_category))
         self.add_item(PermissionsRoleSelect())
@@ -108,7 +108,7 @@ class PermissionsPanelView(discord.ui.View):
                 inline=False
             )
 
-        embed.set_footer(text="1. Выберите категорию -> 2. Выберите роль -> 3. Нажмите кнопку Добавить или Удалить")
+        embed.set_footer(text="1. Выберите категорию -> 2. Выберите одну или несколько ролей -> 3. Нажмите кнопку Добавить или Удалить")
         return embed
 
     async def refresh(self, interaction: discord.Interaction):
@@ -118,47 +118,52 @@ class PermissionsPanelView(discord.ui.View):
         else:
             await interaction.edit_original_response(embed=embed, view=self)
 
-    @discord.ui.button(label="Добавить роль в категорию", style=discord.ButtonStyle.success, emoji="➕", row=2)
+    @discord.ui.button(label="Добавить роли в категорию", style=discord.ButtonStyle.success, emoji="➕", row=2)
     async def btn_add_role(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.selected_role_id:
+        if not self.selected_role_ids:
             return await interaction.response.send_message(
-                "⚠️ Сначала выберите роль в меню выбора выше!",
+                "⚠️ Сначала выберите одну или несколько ролей в меню выше!",
                 ephemeral=True
             )
 
-        role = self.guild.get_role(self.selected_role_id)
-        if not role:
-            return await interaction.response.send_message("❌ Роль не найдена на сервере.", ephemeral=True)
+        added_mentions = []
+        for rid in self.selected_role_ids:
+            role = self.guild.get_role(rid)
+            if role:
+                await add_category_role(self.guild.id, self.selected_category, role.id)
+                added_mentions.append(role.mention)
 
-        await add_category_role(self.guild.id, self.selected_category, role.id)
         cat_name = CATEGORIES[self.selected_category]["title"]
         await interaction.response.send_message(
-            f"✅ Роль {role.mention} успешно получила доступ к категории **{cat_name}**!",
+            f"✅ Роли {', '.join(added_mentions)} успешно получили доступ к категории **{cat_name}**!",
             ephemeral=True
         )
         await self.refresh(interaction)
 
-    @discord.ui.button(label="Удалить роль из категории", style=discord.ButtonStyle.danger, emoji="➖", row=2)
+    @discord.ui.button(label="Удалить роли из категории", style=discord.ButtonStyle.danger, emoji="➖", row=2)
     async def btn_remove_role(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.selected_role_id:
+        if not self.selected_role_ids:
             return await interaction.response.send_message(
-                "⚠️ Сначала выберите роль в меню выбора выше!",
+                "⚠️ Сначала выберите одну или несколько ролей в меню выше!",
                 ephemeral=True
             )
 
-        role = self.guild.get_role(self.selected_role_id)
-        role_mention = role.mention if role else f"ID: {self.selected_role_id}"
+        removed_mentions = []
+        for rid in self.selected_role_ids:
+            role = self.guild.get_role(rid)
+            role_str = role.mention if role else f"ID: {rid}"
+            if await remove_category_role(self.guild.id, self.selected_category, rid):
+                removed_mentions.append(role_str)
 
-        removed = await remove_category_role(self.guild.id, self.selected_category, self.selected_role_id)
         cat_name = CATEGORIES[self.selected_category]["title"]
-        if removed:
+        if removed_mentions:
             await interaction.response.send_message(
-                f"🗑️ Роль {role_mention} удалена из категории **{cat_name}**.",
+                f"🗑️ Роли {', '.join(removed_mentions)} удалены из категории **{cat_name}**.",
                 ephemeral=True
             )
         else:
             await interaction.response.send_message(
-                f"ℹ️ Роль {role_mention} не была привязана к этой категории.",
+                f"ℹ️ Выбранные роли не были привязаны к этой категории.",
                 ephemeral=True
             )
         await self.refresh(interaction)

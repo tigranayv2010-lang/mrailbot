@@ -3,14 +3,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from database import get_guild_settings, update_guild_settings
+from database import get_guild_settings, update_guild_settings, parse_id_list, format_id_list
 from config import COLOR_PRIMARY, COLOR_SUCCESS, COLOR_ERROR
 from permissions import require_permission
 
 logger = logging.getLogger("bot.autorole")
 
 class AutoRole(commands.Cog):
-    """Модуль автоматической выдачи роли новым участникам"""
+    """Модуль автоматической выдачи ролей новым участникам"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -24,27 +24,27 @@ class AutoRole(commands.Cog):
         if not settings.get("autorole_enabled"):
             return
 
-        role_id = settings.get("autorole_id")
-        if not role_id:
+        role_ids = parse_id_list(settings.get("autorole_ids")) or parse_id_list(settings.get("autorole_id"))
+        if not role_ids:
             return
 
-        role = member.guild.get_role(role_id)
-        if not role:
-            logger.warning(f"Роль авто-выдачи {role_id} не найдена на сервере {member.guild.name}")
+        roles_to_add = [member.guild.get_role(rid) for rid in role_ids if member.guild.get_role(rid)]
+        if not roles_to_add:
             return
 
         try:
-            await member.add_roles(role, reason="Авто-роль при первом входе")
-            logger.info(f"Выдана авто-роль {role.name} участнику {member} на сервере {member.guild.name}")
+            await member.add_roles(*roles_to_add, reason="Авто-роли при первом входе")
+            role_names = ", ".join([r.name for r in roles_to_add])
+            logger.info(f"Выданы авто-роли [{role_names}] участнику {member} на сервере {member.guild.name}")
         except discord.Forbidden:
-            logger.error(f"Недостаточно прав для выдачи роли {role.name} на сервере {member.guild.name}. Убедитесь, что роль бота выше выдаваемой роли.")
+            logger.error(f"Недостаточно прав для выдачи авто-ролей на сервере {member.guild.name}. Убедитесь, что роль бота выше выдаваемых ролей.")
         except Exception as e:
             logger.error(f"Ошибка при выдаче авто-роли: {e}")
 
     # --- Slash Commands ---
     autorole_group = app_commands.Group(
         name="autorole",
-        description="Настройка автоматической выдачи роли новым участникам"
+        description="Настройка автоматической выдачи ролей новым участникам"
     )
 
     @autorole_group.command(name="set", description="Установить роль для новых участников")
@@ -66,14 +66,17 @@ class AutoRole(commands.Cog):
         await update_guild_settings(
             interaction.guild.id,
             autorole_enabled=1,
-            autorole_id=role.id
+            autorole_id=role.id,
+            autorole_ids=str(role.id)
         )
 
         embed = discord.Embed(
             title="✅ Авто-роль успешно настроена",
-            description=f"Новым участникам теперь будет автоматически выдаваться роль: {role.mention}\nСтатус: **Включено**",
+            description=f"Новым участникам теперь будет автоматически выдаваться роль: {role.mention}\nСтатус: **Включено**\n\n"
+                        f"*Подсказка: чтобы выбрать сразу несколько ролей для новичков, используйте команду `/panel` -> Авто-роль.*",
             color=COLOR_SUCCESS
         )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @autorole_group.command(name="disable", description="Отключить автоматическую выдачу ролей")
@@ -94,15 +97,16 @@ class AutoRole(commands.Cog):
             return
         settings = await get_guild_settings(interaction.guild.id)
         enabled = bool(settings.get("autorole_enabled"))
-        role_id = settings.get("autorole_id")
-        role = interaction.guild.get_role(role_id) if role_id else None
+        role_ids = parse_id_list(settings.get("autorole_ids")) or parse_id_list(settings.get("autorole_id"))
+        roles = [interaction.guild.get_role(rid) for rid in role_ids if interaction.guild.get_role(rid)]
+        roles_str = ", ".join([r.mention for r in roles]) if roles else "Не установлена"
 
         embed = discord.Embed(
             title="👤 Статус авто-роли",
             color=COLOR_PRIMARY
         )
         embed.add_field(name="Состояние", value="🟢 Включено" if enabled else "🔴 Выключено", inline=True)
-        embed.add_field(name="Назначенная роль", value=role.mention if role else "Не установлена", inline=True)
+        embed.add_field(name="Назначенные роли", value=roles_str, inline=True)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot: commands.Bot):

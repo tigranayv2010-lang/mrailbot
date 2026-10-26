@@ -43,7 +43,7 @@ class Welcomer(commands.Cog):
         title = self._format_text(settings.get("welcome_title") or "Добро пожаловать!", member)
         raw_msg = settings.get("welcome_message") or "Привет новенький, {user}! Добро пожаловать на сервер **{server}**!"
         description = self._format_text(raw_msg, member)
-        color = parse_color(settings.get("welcome_color") or "#6F38AA")
+        color = parse_color(settings.get("welcome_color") or "#FFFFFF")
 
         embed = discord.Embed(
             title=title,
@@ -109,7 +109,7 @@ class Welcomer(commands.Cog):
         channel="Канал для приветствий",
         title="Заголовок (можно использовать {user}, {username}, {server}, {count})",
         message="Текст приветствия (плейсхолдеры: {user}, {username}, {server}, {count})",
-        color="Цвет боковой полосы (HEX, например #6F38AA)",
+        color="Цвет боковой полосы (HEX, например #FFFFFF)",
         image_url="Ссылка на баннер/картинку (опционально)"
     )
     async def welcome_setup(
@@ -118,7 +118,7 @@ class Welcomer(commands.Cog):
         channel: discord.TextChannel,
         title: str = "Добро пожаловать!",
         message: str = "Привет новенький, {user}! Добро пожаловать на сервер **{server}**! Ты наш **{count}**-й участник.",
-        color: str = "#6F38AA",
+        color: str = "#FFFFFF",
         image_url: str = None
     ):
         if not await require_permission(interaction, "settings"):
@@ -155,7 +155,7 @@ class Welcomer(commands.Cog):
         title = self._format_text(settings.get("welcome_title") or "Добро пожаловать!", interaction.user)
         raw_msg = settings.get("welcome_message") or "Привет новенький, {user}! Добро пожаловать на сервер **{server}**!"
         description = self._format_text(raw_msg, interaction.user)
-        color = parse_color(settings.get("welcome_color") or "#6F38AA")
+        color = parse_color(settings.get("welcome_color") or "#FFFFFF")
 
         embed = discord.Embed(
             title=f"Тест: {title}",
