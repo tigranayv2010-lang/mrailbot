@@ -278,7 +278,7 @@ class TicketLaunchView(discord.ui.View):
         embed = discord.Embed(
             title=formatted_title,
             description=formatted_desc,
-            color=parse_color(settings.get("ticket_panel_color", "#FFFFFF")),
+            color=parse_color(settings.get("ticket_panel_color", "#F5F3F3")),
             timestamp=discord.utils.utcnow()
         )
         embed.add_field(name="Создатель", value=user.mention, inline=True)
@@ -334,8 +334,8 @@ class TicketPanelEditModal(discord.ui.Modal, title="Настройка внеш�
     )
     color_input = discord.ui.TextInput(
         label="Цвет боковой линии (HEX)",
-        placeholder="#FFFFFF (по умолчанию белый)",
-        default="#FFFFFF",
+        placeholder="#F5F3F3 (по умолчанию #F5F3F3)",
+        default="#F5F3F3",
         required=False,
         max_length=10
     )
@@ -347,7 +347,7 @@ class TicketPanelEditModal(discord.ui.Modal, title="Настройка внеш�
         self.desc_input.default = settings.get("ticket_panel_desc", "Если у вас возник вопрос, жалоба или предложение — нажмите кнопку ниже.")
         self.btn_label_input.default = settings.get("ticket_btn_label", "Создать тикет")
         self.btn_emoji_input.default = settings.get("ticket_btn_emoji", "📩")
-        self.color_input.default = settings.get("ticket_panel_color", "#FFFFFF")
+        self.color_input.default = settings.get("ticket_panel_color", "#F5F3F3")
 
     async def on_submit(self, interaction: discord.Interaction):
         await update_guild_settings(
@@ -356,7 +356,7 @@ class TicketPanelEditModal(discord.ui.Modal, title="Настройка внеш�
             ticket_panel_desc=self.desc_input.value.strip(),
             ticket_btn_label=self.btn_label_input.value.strip() or "Создать тикет",
             ticket_btn_emoji=self.btn_emoji_input.value.strip() or "📩",
-            ticket_panel_color=self.color_input.value.strip() or "#FFFFFF"
+            ticket_panel_color=self.color_input.value.strip() or "#F5F3F3"
         )
         await interaction.response.send_message("✅ Внешний вид панели тикетов успешно обновлен!", ephemeral=True)
         await self.builder_view.refresh(interaction)
@@ -455,7 +455,7 @@ class TicketBuilderView(discord.ui.View):
                 f"• Заголовок: **{settings.get('ticket_panel_title', 'Поддержка и создание тикетов')}**\n"
                 f"• Текст: {settings.get('ticket_panel_desc', 'Стандартный')}\n"
                 f"• Кнопка: `{settings.get('ticket_btn_emoji', '📩')} {settings.get('ticket_btn_label', 'Создать тикет')}`\n"
-                f"• Цвет боковой линии: `{settings.get('ticket_panel_color', '#FFFFFF')}`\n\n"
+                f"• Цвет боковой линии: `{settings.get('ticket_panel_color', '#F5F3F3')}`\n\n"
                 "**2. Внутри созданного тикета:**\n"
                 f"• Заголовок: `{settings.get('ticket_inside_title', 'Тикет #{number}')}`\n"
                 f"• Кнопки: `{settings.get('ticket_close_btn_label', 'Закрыть тикет')}`, `{settings.get('ticket_transcript_btn_label', 'Транскрипт')}`, `{settings.get('ticket_alert_btn_label', 'Позвать поддержку')}`\n\n"
@@ -464,7 +464,7 @@ class TicketBuilderView(discord.ui.View):
                 f"• Категория тикетов: {cat_str}\n"
                 f"• Канал сохранения логов: {log_str}"
             ),
-            color=parse_color(settings.get("ticket_panel_color", "#FFFFFF"))
+            color=parse_color(settings.get("ticket_panel_color", "#F5F3F3"))
         )
         embed.set_footer(text="Используйте кнопки ниже для редактирования и публикации панели в канал")
         return embed
@@ -567,7 +567,7 @@ class TicketBuilderView(discord.ui.View):
             panel_embed = discord.Embed(
                 title=settings.get("ticket_panel_title", "Поддержка и создание тикетов"),
                 description=settings.get("ticket_panel_desc", "Если у вас возник вопрос, жалоба или предложение — нажмите кнопку ниже.\nДля вас будет автоматически создан отдельный приватный канал."),
-                color=parse_color(settings.get("ticket_panel_color", "#FFFFFF"))
+                color=parse_color(settings.get("ticket_panel_color", "#F5F3F3"))
             )
             panel_embed.set_footer(
                 text=f"Служба поддержки • {sel_interaction.guild.name}",

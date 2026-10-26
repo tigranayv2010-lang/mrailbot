@@ -9,7 +9,7 @@ from permissions import require_permission
 
 logger = logging.getLogger("bot.embed_builder")
 
-# --- Modals for Interactive Builder ---
+# --- Модальные окна для редактирования текущего Embed ---
 
 class EditMainModal(discord.ui.Modal, title="Редактирование Заголовка и Описания"):
     title_input = discord.ui.TextInput(
@@ -33,15 +33,16 @@ class EditMainModal(discord.ui.Modal, title="Редактирование Заг
 
     async def on_submit(self, interaction: discord.Interaction):
         view: EmbedBuilderView = self.builder_view
-        view.current_data["title"] = self.title_input.value.strip()
-        view.current_data["description"] = self.description_input.value
+        current_data = view.embeds_list[view.current_index]
+        current_data["title"] = self.title_input.value.strip()
+        current_data["description"] = self.description_input.value
         await view.update_preview(interaction)
 
 class EditStyleModal(discord.ui.Modal, title="Настройка Цвета и Медиа"):
     color_input = discord.ui.TextInput(
         label="Цвет боковой полосы (HEX)",
-        placeholder="#FFFFFF (белый по умолчанию)",
-        default="#FFFFFF",
+        placeholder="#F5F3F3 (системный по умолчанию)",
+        default="#F5F3F3",
         required=False,
         max_length=10
     )
@@ -58,21 +59,22 @@ class EditStyleModal(discord.ui.Modal, title="Настройка Цвета и �
 
     def __init__(self, current_color: str, current_thumb: str, current_img: str):
         super().__init__()
-        self.color_input.default = current_color or "#FFFFFF"
+        self.color_input.default = current_color or "#F5F3F3"
         self.thumbnail_input.default = current_thumb or ""
         self.image_input.default = current_img or ""
 
     async def on_submit(self, interaction: discord.Interaction):
         view: EmbedBuilderView = self.builder_view
-        view.current_data["color"] = self.color_input.value.strip() or "#FFFFFF"
-        view.current_data["thumbnail"] = self.thumbnail_input.value.strip() or None
-        view.current_data["image"] = self.image_input.value.strip() or None
+        current_data = view.embeds_list[view.current_index]
+        current_data["color"] = self.color_input.value.strip() or "#F5F3F3"
+        current_data["thumbnail"] = self.thumbnail_input.value.strip() or None
+        current_data["image"] = self.image_input.value.strip() or None
         await view.update_preview(interaction)
 
 class EditFooterAuthorModal(discord.ui.Modal, title="Настройка Автора и Подвала"):
     author_input = discord.ui.TextInput(
         label="Имя автора (сверху над заголовком)",
-        placeholder="Например: Nevskiy RP",
+        placeholder="Например: MRAIL RP",
         required=False,
         max_length=100
     )
@@ -102,10 +104,11 @@ class EditFooterAuthorModal(discord.ui.Modal, title="Настройка Авто
 
     async def on_submit(self, interaction: discord.Interaction):
         view: EmbedBuilderView = self.builder_view
-        view.current_data["author"] = self.author_input.value.strip() or None
-        view.current_data["author_icon"] = self.author_icon_input.value.strip() or None
-        view.current_data["footer"] = self.footer_input.value.strip() or None
-        view.current_data["footer_icon"] = self.footer_icon_input.value.strip() or None
+        current_data = view.embeds_list[view.current_index]
+        current_data["author"] = self.author_input.value.strip() or None
+        current_data["author_icon"] = self.author_icon_input.value.strip() or None
+        current_data["footer"] = self.footer_input.value.strip() or None
+        current_data["footer_icon"] = self.footer_icon_input.value.strip() or None
         await view.update_preview(interaction)
 
 class AddFieldModal(discord.ui.Modal, title="Добавить поле (Field) в Embed"):
@@ -132,21 +135,51 @@ class AddFieldModal(discord.ui.Modal, title="Добавить поле (Field) �
 
     async def on_submit(self, interaction: discord.Interaction):
         view: EmbedBuilderView = self.builder_view
+        current_data = view.embeds_list[view.current_index]
         is_inline = self.inline_input.value.strip() == "1"
-        view.current_data["fields"].append({
+        current_data["fields"].append({
             "name": self.field_name.value.strip(),
             "value": self.field_value.value.strip(),
             "inline": is_inline
         })
         await view.update_preview(interaction)
 
-# --- Select for Channel Destination ---
+# --- Селектор переключения между редактируемыми Embeds ---
+
+class EmbedSelect(discord.ui.Select):
+    def __init__(self, count: int, current_index: int, titles: list):
+        options = []
+        for i in range(count):
+            t = titles[i] if i < len(titles) and titles[i] else f"Embed #{i + 1}"
+            options.append(
+                discord.SelectOption(
+                    label=f"Embed #{i + 1}: {t[:20]}",
+                    value=str(i),
+                    default=(i == current_index),
+                    description=f"Переключиться на редактирование блока #{i + 1}"
+                )
+            )
+        super().__init__(
+            placeholder="Выберите Embed для редактирования...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=0
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        view: EmbedBuilderView = self.view
+        view.current_index = int(self.values[0])
+        await view.update_preview(interaction)
+
+# --- Селектор канала для публикации ---
 
 class ChannelSelect(discord.ui.ChannelSelect):
     def __init__(self):
         super().__init__(
-            placeholder="Выберите канал для отправки готового сообщения...",
-            channel_types=[discord.ChannelType.text]
+            placeholder="Выберите канал для отправки всех Embed сразу...",
+            channel_types=[discord.ChannelType.text],
+            row=3
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -155,44 +188,102 @@ class ChannelSelect(discord.ui.ChannelSelect):
         embeds = view.build_embeds()
 
         if not embeds:
-            return await interaction.response.send_message("❌ Нельзя отправить пустой Embed. Заполните хотя бы описание или заголовок.", ephemeral=True)
+            return await interaction.response.send_message("❌ Нельзя отправить пустое сообщение. Заполните хотя бы один Embed.", ephemeral=True)
 
         try:
             target_channel = interaction.guild.get_channel(channel.id)
             if not isinstance(target_channel, discord.TextChannel):
                 return await interaction.response.send_message("❌ Некорректный текстовый канал.", ephemeral=True)
 
+            # Отправка всех созданных Embed сразу одним сообщением!
             await target_channel.send(embeds=embeds)
-            await interaction.response.send_message(f"✅ Сообщение успешно отправлено в {target_channel.mention}!", ephemeral=True)
+            await interaction.response.send_message(f"✅ Успешно отправлено {len(embeds)} Embed-блоков в {target_channel.mention}!", ephemeral=True)
         except discord.Forbidden:
             await interaction.response.send_message("❌ У бота нет прав на отправку сообщений в этот канал.", ephemeral=True)
         except Exception as e:
             logger.error(f"Ошибка при отправке Embed: {e}")
             await interaction.response.send_message(f"❌ Ошибка отправки: {e}", ephemeral=True)
 
-# --- Main Interactive Builder View ---
+# --- Главный интерактивный мульти-конструктор Embed ---
 
 class EmbedBuilderView(discord.ui.View):
     def __init__(self, author_id: int):
-        super().__init__(timeout=600)
+        super().__init__(timeout=900)
         self.author_id = author_id
-        
-        # Данные первого эмбеда
-        self.current_data = {
-            "title": "Информация о проекте",
-            "description": "Привет новенький!\nТы попал на наш сервер.\n\nЗдесь вы можете настроить любой текст, цвета и ссылки на каналы!",
-            "color": "#FFFFFF",
-            "thumbnail": None,
-            "image": None,
-            "author": None,
-            "author_icon": None,
-            "footer": None,
-            "footer_icon": None,
-            "fields": []
-        }
-        # Опциональный второй эмбед (как на скриншоте пользователя!)
-        self.second_embed_data = None
 
+        # Список создаваемых Embeds (до 10 штук в одном сообщении)
+        self.embeds_list = [
+            {
+                "title": "Информация о проекте",
+                "description": "Привет новенький!\nТы попал на наш сервер.\n\nЗдесь вы можете настроить любой текст, цвета и ссылки на каналы!",
+                "color": "#F5F3F3",
+                "thumbnail": None,
+                "image": None,
+                "author": None,
+                "author_icon": None,
+                "footer": None,
+                "footer_icon": None,
+                "fields": []
+            }
+        ]
+        self.current_index = 0
+        self.update_components()
+
+    def update_components(self):
+        """Обновляет элементы управления и селектор Embeds"""
+        self.clear_items()
+
+        # 1. Выпадающий список выбора редактируемого Embed
+        titles = [e.get("title", f"Embed #{i+1}") for i, e in enumerate(self.embeds_list)]
+        self.add_item(EmbedSelect(len(self.embeds_list), self.current_index, titles))
+
+        # 2. Кнопки редактирования текущего Embed (Row 1)
+        btn_text = discord.ui.Button(label="Текст & Заголовок", style=discord.ButtonStyle.primary, emoji="📝", row=1)
+        btn_text.callback = self.btn_text_callback
+        self.add_item(btn_text)
+
+        btn_style = discord.ui.Button(label="Цвет & Медиа", style=discord.ButtonStyle.secondary, emoji="🎨", row=1)
+        btn_style.callback = self.btn_style_callback
+        self.add_item(btn_style)
+
+        btn_author = discord.ui.Button(label="Автор & Подвал", style=discord.ButtonStyle.secondary, emoji="👤", row=1)
+        btn_author.callback = self.btn_author_callback
+        self.add_item(btn_author)
+
+        btn_field = discord.ui.Button(label="+ Поле", style=discord.ButtonStyle.secondary, emoji="➕", row=1)
+        btn_field.callback = self.btn_field_callback
+        self.add_item(btn_field)
+
+        btn_clear_fields = discord.ui.Button(label="Очистить поля", style=discord.ButtonStyle.danger, emoji="🗑️", row=1)
+        btn_clear_fields.callback = self.btn_clear_fields_callback
+        self.add_item(btn_clear_fields)
+
+        # 3. Кнопки управления мульти-эмбедами (Row 2)
+        btn_add_embed = discord.ui.Button(
+            label=f"+ Добавить Embed ({len(self.embeds_list)}/10)",
+            style=discord.ButtonStyle.success,
+            emoji="➕",
+            disabled=(len(self.embeds_list) >= 10),
+            row=2
+        )
+        btn_add_embed.callback = self.btn_add_embed_callback
+        self.add_item(btn_add_embed)
+
+        btn_del_embed = discord.ui.Button(
+            label="Удалить этот Embed",
+            style=discord.ButtonStyle.danger,
+            emoji="❌",
+            disabled=(len(self.embeds_list) <= 1),
+            row=2
+        )
+        btn_del_embed.callback = self.btn_del_embed_callback
+        self.add_item(btn_del_embed)
+
+        btn_preset = discord.ui.Button(label="Шаблон со скриншота", style=discord.ButtonStyle.secondary, emoji="📋", row=2)
+        btn_preset.callback = self.btn_preset_callback
+        self.add_item(btn_preset)
+
+        # 4. Канал для отправки всех Embed (Row 3)
         self.add_item(ChannelSelect())
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -202,7 +293,7 @@ class EmbedBuilderView(discord.ui.View):
         return True
 
     def build_single_embed(self, data: dict) -> discord.Embed:
-        color = parse_color(data.get("color") or "#FFFFFF")
+        color = parse_color(data.get("color") or "#F5F3F3")
         embed = discord.Embed(
             title=data.get("title") or None,
             description=data.get("description") or None,
@@ -222,70 +313,80 @@ class EmbedBuilderView(discord.ui.View):
 
     def build_embeds(self) -> list[discord.Embed]:
         embeds = []
-        if self.current_data.get("title") or self.current_data.get("description") or self.current_data.get("fields"):
-            embeds.append(self.build_single_embed(self.current_data))
-        if self.second_embed_data and (self.second_embed_data.get("title") or self.second_embed_data.get("description")):
-            embeds.append(self.build_single_embed(self.second_embed_data))
+        for data in self.embeds_list:
+            if data.get("title") or data.get("description") or data.get("fields") or data.get("image"):
+                embeds.append(self.build_single_embed(data))
         return embeds
 
     async def update_preview(self, interaction: discord.Interaction):
+        self.update_components()
         embeds = self.build_embeds()
         if not embeds:
-            temp = discord.Embed(title="Предпросмотр", description="[Embed пока пуст. Заполните текст через кнопки ниже]", color=COLOR_PRIMARY)
+            temp = discord.Embed(
+                title="Предпросмотр",
+                description="[Все Embed пустые. Заполните текст через кнопку «Текст & Заголовок»]",
+                color=COLOR_PRIMARY
+            )
             embeds = [temp]
-        await interaction.response.edit_message(content="🎨 **Интерактивный конструктор Embed-сообщений** (Предпросмотр ниже):", embeds=embeds, view=self)
 
-    @discord.ui.button(label="Текст & Заголовок", style=discord.ButtonStyle.primary, emoji="📝", row=1)
-    async def btn_text(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = EditMainModal(self.current_data.get("title", ""), self.current_data.get("description", ""))
+        current_embed_info = self.embeds_list[self.current_index]
+        cur_title = current_embed_info.get("title") or f"Embed #{self.current_index + 1}"
+
+        content = (
+            f"🎨 **Конструктор мульти-Embed сообщений**\n"
+            f"Редактируется: **Embed #{self.current_index + 1}** (`{cur_title[:30]}`) | Всего Embeds: **{len(self.embeds_list)}/10**\n"
+            f"Все блоки ниже будут отправлены **одновременно одним сообщением**!"
+        )
+
+        if not interaction.response.is_done():
+            await interaction.response.edit_message(content=content, embeds=embeds, view=self)
+        else:
+            await interaction.edit_original_response(content=content, embeds=embeds, view=self)
+
+    # Callbacks
+    async def btn_text_callback(self, interaction: discord.Interaction):
+        current_data = self.embeds_list[self.current_index]
+        modal = EditMainModal(current_data.get("title", ""), current_data.get("description", ""))
         modal.builder_view = self
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Цвет & Картинки", style=discord.ButtonStyle.secondary, emoji="🎨", row=1)
-    async def btn_style(self, interaction: discord.Interaction, button: discord.ui.Button):
-        modal = EditStyleModal(self.current_data.get("color", "#FFFFFF"), self.current_data.get("thumbnail", ""), self.current_data.get("image", ""))
+    async def btn_style_callback(self, interaction: discord.Interaction):
+        current_data = self.embeds_list[self.current_index]
+        modal = EditStyleModal(current_data.get("color", "#F5F3F3"), current_data.get("thumbnail", ""), current_data.get("image", ""))
         modal.builder_view = self
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Автор & Подвал", style=discord.ButtonStyle.secondary, emoji="👤", row=1)
-    async def btn_author_footer(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def btn_author_callback(self, interaction: discord.Interaction):
+        current_data = self.embeds_list[self.current_index]
         modal = EditFooterAuthorModal(
-            self.current_data.get("author", ""),
-            self.current_data.get("author_icon", ""),
-            self.current_data.get("footer", ""),
-            self.current_data.get("footer_icon", "")
+            current_data.get("author", ""),
+            current_data.get("author_icon", ""),
+            current_data.get("footer", ""),
+            current_data.get("footer_icon", "")
         )
         modal.builder_view = self
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="+ Поле (Field)", style=discord.ButtonStyle.secondary, emoji="➕", row=1)
-    async def btn_add_field(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if len(self.current_data.get("fields", [])) >= 25:
-            return await interaction.response.send_message("❌ Достигнут лимит в 25 полей.", ephemeral=True)
+    async def btn_field_callback(self, interaction: discord.Interaction):
+        current_data = self.embeds_list[self.current_index]
+        if len(current_data.get("fields", [])) >= 25:
+            return await interaction.response.send_message("❌ Достигнут лимит в 25 полей для этого Embed.", ephemeral=True)
         modal = AddFieldModal()
         modal.builder_view = self
         await interaction.response.send_modal(modal)
 
-    @discord.ui.button(label="Очистить поля", style=discord.ButtonStyle.danger, emoji="🗑️", row=1)
-    async def btn_clear_fields(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_data["fields"] = []
+    async def btn_clear_fields_callback(self, interaction: discord.Interaction):
+        self.embeds_list[self.current_index]["fields"] = []
         await self.update_preview(interaction)
 
-    @discord.ui.button(label="Шаблон как на скриншоте", style=discord.ButtonStyle.success, emoji="📋", row=2)
-    async def btn_screenshot_template(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Загружаем точно такой шаблон, как на фото пользователя
-        self.current_data = {
-            "title": "Информация о проекте",
-            "description": (
-                "Привет новенький!\n"
-                "Ты попал на сервер \"Невский\"\n"
-                "Тут ты можешь стать от Помощника Машиниста До Начальника депо! Или даже выше!\n\n"
-                "Что есть на нашем проекте ?\n"
-                "У нас есть поезда сервер про железную дорогу: ,\n"
-                "большая карта,\n"
-                "дружный коллектив."
-            ),
-            "color": "#6F38AA",
+    async def btn_add_embed_callback(self, interaction: discord.Interaction):
+        if len(self.embeds_list) >= 10:
+            return await interaction.response.send_message("❌ Discord поддерживает максимум 10 Embeds в одном сообщении.", ephemeral=True)
+
+        new_embed = {
+            "title": f"Блок #{len(self.embeds_list) + 1}",
+            "description": "Текст нового блока сообщения...",
+            "color": "#F5F3F3",
             "thumbnail": None,
             "image": None,
             "author": None,
@@ -294,47 +395,93 @@ class EmbedBuilderView(discord.ui.View):
             "footer_icon": None,
             "fields": []
         }
-        self.second_embed_data = {
-            "title": "Каналы и/их назначения",
-            "description": (
-                "**Информация по каналам:**\n"
-                "**Проект**\n"
-                "• Правила Discord - # • 🍁 правила-discord - правила дискорд сервера.\n"
-                "• Новости - • 📢 ☂️ новости - новостной канал.\n"
-                "• Правила Minecraft - # • 🍁 правила-discord - правила майнкрафт сервера.\n"
-                "• Тест на проходку - # • 👩 верификация\n\n"
-                "**RolePlay**\n"
-                "• Расписание - # неизвестно - расписание поездов\n"
-                "• Банкомат - # • 🍁 банкомат - банкомат.\n"
-                "• сборка сервера - • 🫐 сборка-сервака\n"
-                "• Общие приказы - # • 💐 кадровый-аудит-рук-состава - Выписываются приказы не косаемо железной дороги.\n\n"
-                "**Discord - channel**\n"
-                "• Выговоры - # 🪓 гр-аудит-взысканий - выдаются выговоры/предупреждения если (3/3) выговоров/предупреждений сотрудник снимается с должности.\n"
-                "• команды ботов - # 🪚 🤖 команды-ботов - Команды ботам.\n\n"
-                "**Валюта - channel**\n"
-                "• поддержка сервера - # (поддержка-сервера) - Поддержать сервер реальной валютой."
-            ),
-            "color": "#6F38AA",
-            "thumbnail": None,
-            "image": None,
-            "author": None,
-            "author_icon": None,
-            "footer": None,
-            "footer_icon": None,
-            "fields": []
-        }
+        self.embeds_list.append(new_embed)
+        self.current_index = len(self.embeds_list) - 1
         await self.update_preview(interaction)
 
-    @discord.ui.button(label="Удалить 2-й Embed", style=discord.ButtonStyle.secondary, emoji="❌", row=2)
-    async def btn_remove_second(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.second_embed_data = None
+    async def btn_del_embed_callback(self, interaction: discord.Interaction):
+        if len(self.embeds_list) <= 1:
+            return await interaction.response.send_message("❌ Нельзя удалить единственный Embed.", ephemeral=True)
+
+        self.embeds_list.pop(self.current_index)
+        self.current_index = max(0, self.current_index - 1)
+        await self.update_preview(interaction)
+
+    async def btn_preset_callback(self, interaction: discord.Interaction):
+        self.embeds_list = [
+            {
+                "title": "Информация о проекте",
+                "description": (
+                    "Привет новенький!\n"
+                    "Ты попал на сервер \"Невский\"\n"
+                    "Тут ты можешь стать от Помощника Машиниста До Начальника депо! Или даже выше!\n\n"
+                    "Что есть на нашем проекте ?\n"
+                    "У нас есть поезда сервер про железную дорогу: ,\n"
+                    "большая карта,\n"
+                    "дружный коллектив."
+                ),
+                "color": "#F5F3F3",
+                "thumbnail": None,
+                "image": None,
+                "author": None,
+                "author_icon": None,
+                "footer": None,
+                "footer_icon": None,
+                "fields": []
+            },
+            {
+                "title": "Каналы и/их назначения",
+                "description": (
+                    "**Информация по каналам:**\n"
+                    "**Проект**\n"
+                    "• Правила Discord - # • 🍁 правила-discord - правила дискорд сервера.\n"
+                    "• Новости - • 📢 ☂️ новости - новостной канал.\n"
+                    "• Правила Minecraft - # • 🍁 правила-discord - правила майнкрафт сервера.\n"
+                    "• Тест на проходку - # • 👩 верификация\n\n"
+                    "**RolePlay**\n"
+                    "• Расписание - # неизвестно - расписание поездов\n"
+                    "• Банкомат - # • 🍁 банкомат - банкомат.\n"
+                    "• сборка сервера - • 🫐 сборка-сервака\n"
+                    "• Общие приказы - # • 💐 кадровый-аудит-рук-состава - Выписываются приказы не косаемо железной дороги.\n\n"
+                    "**Discord - channel**\n"
+                    "• Выговоры - # 🪓 гр-аудит-взысканий - выдаются выговоры/предупреждения если (3/3) выговоров/предупреждений сотрудник снимается с должности.\n"
+                    "• команды ботов - # 🪚 🤖 команды-ботов - Команды ботам.\n\n"
+                    "**Валюта - channel**\n"
+                    "• поддержка сервера - # (поддержка-сервера) - Поддержать сервер реальной валютой."
+                ),
+                "color": "#F5F3F3",
+                "thumbnail": None,
+                "image": None,
+                "author": None,
+                "author_icon": None,
+                "footer": None,
+                "footer_icon": None,
+                "fields": []
+            }
+        ]
+        self.current_index = 0
         await self.update_preview(interaction)
 
 class EmbedBuilder(commands.Cog):
-    """Модуль создания красивых Embed-сообщений (как на скриншоте)"""
+    """Модуль создания красивых Embed-сообщений (поддержка мульти-эмбедов)"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    # Прямая слэш-команда
+    @app_commands.command(name="embed_builder", description="Открыть конструктор сообщений с поддержкой нескольких Embed")
+    async def direct_embed_builder(self, interaction: discord.Interaction):
+        if not await require_permission(interaction, "embeds"):
+            return
+        view = EmbedBuilderView(author_id=interaction.user.id)
+        embeds = view.build_embeds()
+        await interaction.response.send_message(
+            content="🎨 **Конструктор мульти-Embed сообщений**\n"
+                    "Редактируйте блоки, добавляйте новые через кнопку «+ Добавить Embed», а затем отправьте всё в канал!",
+            embeds=embeds,
+            view=view,
+            ephemeral=True
+        )
 
     embed_group = app_commands.Group(
         name="embed",
@@ -348,9 +495,8 @@ class EmbedBuilder(commands.Cog):
         view = EmbedBuilderView(author_id=interaction.user.id)
         embeds = view.build_embeds()
         await interaction.response.send_message(
-            content="🎨 **Интерактивный конструктор Embed-сообщений** (Предпросмотр ниже):\n"
-                    "Используйте кнопки для настройки текста, цвета, добавления полей и шаблона со скриншота, "
-                    "а затем выберите канал в выпадающем списке.",
+            content="🎨 **Конструктор мульти-Embed сообщений**\n"
+                    "Редактируйте блоки, добавляйте новые через кнопку «+ Добавить Embed», а затем отправьте всё в канал!",
             embeds=embeds,
             view=view,
             ephemeral=True
@@ -372,7 +518,7 @@ class EmbedBuilder(commands.Cog):
                 "большая карта,\n"
                 "дружный коллектив."
             ),
-            color=parse_color("#6F38AA")
+            color=parse_color("#F5F3F3")
         )
 
         embed2 = discord.Embed(
@@ -395,7 +541,7 @@ class EmbedBuilder(commands.Cog):
                 "**Валюта - channel**\n"
                 "• поддержка сервера - # (поддержка-сервера) - Поддержать сервер реальной валютой."
             ),
-            color=parse_color("#6F38AA")
+            color=parse_color("#F5F3F3")
         )
 
         try:
@@ -409,7 +555,7 @@ class EmbedBuilder(commands.Cog):
         channel="Канал для отправки",
         title="Заголовок",
         description="Текст описания",
-        color="HEX-код цвета (например, #6F38AA)",
+        color="HEX-код цвета (например, #F5F3F3)",
         image="Ссылка на большое изображение",
         thumbnail="Ссылка на миниатюру",
         footer="Текст подвала"
@@ -420,7 +566,7 @@ class EmbedBuilder(commands.Cog):
         channel: discord.TextChannel,
         description: str,
         title: str = None,
-        color: str = "#FFFFFF",
+        color: str = "#F5F3F3",
         image: str = None,
         thumbnail: str = None,
         footer: str = None

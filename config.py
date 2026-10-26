@@ -14,14 +14,16 @@ try:
 except ValueError:
     GUILD_ID = 1479400508312784938
 
-# Основная палитра цветов (по умолчанию белый цвет для всех Embed сообщений)
-COLOR_PRIMARY = 0xFFFFFF  # Чистый белый цвет
+# Основная палитра цветов (системный цвет по умолчанию #F5F3F3)
+COLOR_PRIMARY = 0xF5F3F3  # #F5F3F3 - светлый системный оттенок
+COLOR_SYSTEM = 0xF5F3F3   # Системный цвет
 COLOR_WHITE = 0xFFFFFF    # Белый
 COLOR_SUCCESS = 0x2ECC71  # Зеленый
 COLOR_ERROR = 0xE74C3C    # Красный
 COLOR_WARNING = 0xF1C40F  # Желтый
-COLOR_INFO = 0xFFFFFF     # Белый
+COLOR_INFO = 0xF5F3F3     # Светлый системный
 COLOR_PURPLE = 0x6F38AA   # Фиолетовый (опциональный)
+HEX_PRIMARY = "#F5F3F3"
 
 DB_PATH = "bot_database.sqlite3"
 

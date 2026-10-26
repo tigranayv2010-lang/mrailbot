@@ -91,7 +91,7 @@ class Verification(commands.Cog):
         role="Роль, которая будет выдаваться при нажатии",
         title="Заголовок сообщения верификации",
         description="Текст правил/описания верификации",
-        color="Цвет боковой линии (HEX, по умолчанию #6F38AA)"
+        color="Цвет боковой линии (HEX, по умолчанию #F5F3F3)"
     )
     async def verify_setup(
         self,
@@ -100,7 +100,7 @@ class Verification(commands.Cog):
         role: discord.Role,
         title: str = "Верификация на сервере",
         description: str = "Нажмите на кнопку **«Пройти верификацию»** ниже, чтобы подтвердить, что вы человек, и получить доступ ко всем каналам сервера!",
-        color: str = "#FFFFFF"
+        color: str = "#F5F3F3"
     ):
         if not await require_permission(interaction, "settings"):
             return

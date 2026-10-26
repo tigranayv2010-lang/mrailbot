@@ -43,7 +43,7 @@ class Welcomer(commands.Cog):
         title = self._format_text(settings.get("welcome_title") or "Добро пожаловать!", member)
         raw_msg = settings.get("welcome_message") or "Привет новенький, {user}! Добро пожаловать на сервер **{server}**!"
         description = self._format_text(raw_msg, member)
-        color = parse_color(settings.get("welcome_color") or "#FFFFFF")
+        color = parse_color(settings.get("welcome_color") or "#F5F3F3")
 
         embed = discord.Embed(
             title=title,
@@ -109,7 +109,7 @@ class Welcomer(commands.Cog):
         channel="Канал для приветствий",
         title="Заголовок (можно использовать {user}, {username}, {server}, {count})",
         message="Текст приветствия (плейсхолдеры: {user}, {username}, {server}, {count})",
-        color="Цвет боковой полосы (HEX, например #FFFFFF)",
+        color="Цвет боковой полосы (HEX, например #F5F3F3)",
         image_url="Ссылка на баннер/картинку (опционально)"
     )
     async def welcome_setup(
@@ -118,7 +118,7 @@ class Welcomer(commands.Cog):
         channel: discord.TextChannel,
         title: str = "Добро пожаловать!",
         message: str = "Привет новенький, {user}! Добро пожаловать на сервер **{server}**! Ты наш **{count}**-й участник.",
-        color: str = "#FFFFFF",
+        color: str = "#F5F3F3",
         image_url: str = None
     ):
         if not await require_permission(interaction, "settings"):
@@ -155,7 +155,7 @@ class Welcomer(commands.Cog):
         title = self._format_text(settings.get("welcome_title") or "Добро пожаловать!", interaction.user)
         raw_msg = settings.get("welcome_message") or "Привет новенький, {user}! Добро пожаловать на сервер **{server}**!"
         description = self._format_text(raw_msg, interaction.user)
-        color = parse_color(settings.get("welcome_color") or "#FFFFFF")
+        color = parse_color(settings.get("welcome_color") or "#F5F3F3")
 
         embed = discord.Embed(
             title=f"Тест: {title}",
@@ -205,7 +205,7 @@ class Welcomer(commands.Cog):
         )
         embed.add_field(name="Состояние", value="🟢 Включено" if enabled else "🔴 Выключено", inline=True)
         embed.add_field(name="Канал", value=channel.mention if channel else "Не установлен", inline=True)
-        embed.add_field(name="Цвет", value=f"`{settings.get('welcome_color', '#6F38AA')}`", inline=True)
+        embed.add_field(name="Цвет", value=f"`{settings.get('welcome_color', '#F5F3F3')}`", inline=True)
         embed.add_field(name="Заголовок", value=settings.get("welcome_title") or "Добро пожаловать!", inline=False)
         embed.add_field(name="Текст сообщения", value=settings.get("welcome_message") or "Стандартный", inline=False)
         if settings.get("welcome_image"):

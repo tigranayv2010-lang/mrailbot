@@ -30,8 +30,8 @@ class WelcomeEditModal(discord.ui.Modal, title="Настройка текста 
     )
     color_input = discord.ui.TextInput(
         label="Цвет боковой полосы (HEX)",
-        placeholder="#6F38AA",
-        default="#6F38AA",
+        placeholder="#F5F3F3",
+        default="#F5F3F3",
         required=False
     )
 
@@ -40,14 +40,14 @@ class WelcomeEditModal(discord.ui.Modal, title="Настройка текста 
         self.panel_view = panel_view
         self.title_input.default = current_title or "Добро пожаловать!"
         self.message_input.default = current_msg or "Привет новенький, {user}! Добро пожаловать на сервер {server}!"
-        self.color_input.default = current_color or "#6F38AA"
+        self.color_input.default = current_color or "#F5F3F3"
 
     async def on_submit(self, interaction: discord.Interaction):
         await update_guild_settings(
             interaction.guild.id,
             welcome_title=self.title_input.value.strip(),
             welcome_message=self.message_input.value.strip(),
-            welcome_color=self.color_input.value.strip() or "#6F38AA"
+            welcome_color=self.color_input.value.strip() or "#F5F3F3"
         )
         await interaction.response.send_message("✅ Текст приветствия успешно обновлен!", ephemeral=True)
         await self.panel_view.refresh_view(interaction)
@@ -221,7 +221,7 @@ class BotControlPanelView(discord.ui.View):
                 self,
                 settings.get("welcome_title", "Добро пожаловать!"),
                 settings.get("welcome_message", ""),
-                settings.get("welcome_color", "#FFFFFF")
+                settings.get("welcome_color", "#F5F3F3")
             )
             await btn_interaction.response.send_modal(modal)
         edit_btn.callback = on_edit
